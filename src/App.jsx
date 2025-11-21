@@ -230,7 +230,7 @@ export default function App() {
 
           <div className="relative bg-white rounded-2xl p-8 max-w-xl w-full mx-4 shadow-2xl text-center" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-3xl font-bold text-pink-600 mb-4">สุขสันต์วันเกิดนะหนูน้อย💕</h2>
-            <p className="mb-6 text-gray-700">สุขสันต์วันเกิดนะน้องคนเก่ง 🎂✨ <br />
+            <p className="mb-6 text-gray-700">สุขสันต์วันเกิดนะคนเก่ง 🎂✨ <br />
 ขอให้ปีนี้เป็นปีที่สดใสเหมือนรอยยิ้มของหนูนะ
 มีความสุขมาก ๆ สมหวังในสิ่งที่ตั้งใจ
 เรียนเก่งขึ้น โตขึ้นอย่างมีความสุข
