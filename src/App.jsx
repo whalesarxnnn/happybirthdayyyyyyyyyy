@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 
 function Heart({ style }) {
   return <div className="heart absolute w-6 h-6 transform -rotate-45 bg-pink-400" style={style}></div>
@@ -6,12 +6,47 @@ function Heart({ style }) {
 
 export default function App() {
   const [open, setOpen] = useState(false)
+  const audioRef = useRef(null)
   const [hearts, setHearts] = useState([])
   const [confetti, setConfetti] = useState([])
   const [emojis, setEmojis] = useState([])
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isMuted, setIsMuted] = useState(true)
+  const [showEnableSoundPrompt, setShowEnableSoundPrompt] = useState(false)
 
   useEffect(() => {
     createEmojis()
+    // พยายามเล่นเพลงแบบไม่ muted ตอนเข้าเว็บ (จะถูกบล็อกในเบราว์เซอร์หลายตัว)
+    // ถ้าถูกบล็อก จะสลับไป autoplay แบบ muted แล้วแสดงปุ่มให้ผู้ใช้คลิกเพื่อเปิดเสียง
+    try {
+      const a = audioRef.current
+      if (a) {
+        a.volume = 0.5
+        a.muted = false
+        const p = a.play()
+        if (p && typeof p.then === 'function') {
+          p.then(() => {
+            setIsPlaying(true)
+            setIsMuted(false)
+          }).catch(() => {
+            // blocked: start muted autoplay and show prompt
+            try { a.muted = true; a.play().catch(() => {}) } catch (e) {}
+            setIsMuted(true)
+            setShowEnableSoundPrompt(true)
+          })
+        } else {
+          setIsPlaying(true)
+          setIsMuted(false)
+        }
+      }
+    } catch (e) {
+      // fallback: try muted autoplay and show prompt
+      try {
+        const a = audioRef.current
+        if (a) { a.muted = true; a.volume = 0.5; const p = a.play(); if (p && typeof p.then === 'function') p.catch(() => {}) }
+      } catch (e) {}
+      setShowEnableSoundPrompt(true)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -87,6 +122,51 @@ export default function App() {
     setOpen(true)
     triggerHearts()
     triggerConfetti()
+    // พยายามเล่นเพลง — การคลิกปุ่มถือเป็น user gesture จึงมักอนุญาตให้เล่นอัตโนมัติ
+    try {
+      const a = audioRef.current
+      if (a) {
+        const p = a.play()
+        if (p && typeof p.then === 'function') {
+          p.then(() => setIsPlaying(true)).catch(() => {})
+        } else {
+          setIsPlaying(true)
+        }
+      }
+    } catch (e) {}
+  }
+
+  function toggleMute(e) {
+    e.stopPropagation()
+    try {
+      const a = audioRef.current
+      if (!a) return
+      const newMuted = !isMuted
+      a.muted = newMuted
+      // ถ้า unmute ให้แน่ใจว่า volume อยู่ที่ 50%
+      if (!newMuted) a.volume = 0.5
+      setIsMuted(newMuted)
+      // ถ้าปลด mute แต่เพลงยังหยุด ให้พยายามเล่น
+      if (!newMuted && a.paused) {
+        const p = a.play()
+        if (p && typeof p.then === 'function') p.catch(() => {})
+      }
+    } catch (err) {}
+  }
+
+  function enableSound(e) {
+    if (e && e.stopPropagation) e.stopPropagation()
+    try {
+      const a = audioRef.current
+      if (!a) return
+      a.muted = false
+      a.volume = 0.5
+      const p = a.play()
+      if (p && typeof p.then === 'function') p.catch(() => {})
+      setIsMuted(false)
+      setIsPlaying(true)
+      setShowEnableSoundPrompt(false)
+    } catch (err) {}
   }
 
   return (
@@ -132,7 +212,17 @@ export default function App() {
       {open && (
         <div
           className="fixed inset-0 flex items-center justify-center z-50"
-          onClick={() => setOpen(false)}
+          onClick={() => {
+            setOpen(false)
+            try {
+              const a = audioRef.current
+              if (a) {
+                a.pause()
+                a.currentTime = 0
+                setIsPlaying(false)
+              }
+            } catch (e) {}
+          }}
           role="dialog"
           aria-modal="true"
         >
@@ -195,6 +285,33 @@ export default function App() {
         </div>
       )}
 
+
+    {/* หากเบราว์เซอร์บล็อก autoplay แบบไม่-muted จะแสดง prompt ให้ผู้ใช้คลิกเพื่อเปิดเสียง */}
+    {showEnableSoundPrompt && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/60"></div>
+        <div className="relative z-60 bg-white rounded-xl p-6 max-w-sm w-full mx-4 text-center shadow-2xl">
+          <p className="mb-4 text-gray-800">เบราว์เซอร์บล็อกการเล่นเสียงอัตโนมัติ — แตะเพื่อเปิดเสียง</p>
+          <div className="flex justify-center gap-3">
+            <button onClick={enableSound} className="px-4 py-2 bg-pink-500 text-white rounded-full">เปิดเสียง</button>
+            <button onClick={() => setShowEnableSoundPrompt(false)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-full">ไม่เป็นไร</button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* audio element: วางไฟล์เพลงของคุณที่ `public/music.mp3` หรือใช้เส้นทางอื่น เช่น `/your-file.mp3` */}
+    <audio ref={audioRef} src="/music.mp3" loop autoPlay muted={isMuted} preload="auto" />
+
+    {/* ปุ่มแสดง/ปิดเสียง มุมขวาล่าง */}
+    <button
+      onClick={toggleMute}
+      aria-label={isMuted ? 'เปิดเสียง' : 'ปิดเสียง'}
+      className="fixed right-4 bottom-4 z-50 inline-flex items-center justify-center w-12 h-12 rounded-full bg-white/80 backdrop-blur shadow-lg hover:bg-white"
+      title={isMuted ? 'เปิดเสียง' : 'ปิดเสียง'}
+    >
+      <span style={{ fontSize: 18 }}>{isMuted ? '🔇' : '🔊'}</span>
+    </button>
 
       <style>{`
         .heart::before, .heart::after {
